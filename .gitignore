@@ -1,0 +1,101 @@
+# --- ARCHIVOS QUE NO DEBEN IR AL REPOSITORIO ---
+
+# VirtualBox (NO subir discos ni snapshots!)
+*.vdi
+*.vbox-prev
+Snapshots/
+*.ova
+*.ovf
+
+# Archivos de pacientes y documentos reales
+sites/*/documents/**
+sites/*/edi/**
+sites/*/letter_templates/**
+
+# Logs y runtime
+sites/*/logs/**
+sites/*/cache/**
+/tmp/**
+/log/**
+/logs/**
+
+# Dependencias y builds
+/vendor/**
+/node_modules/**
+/public/assets/**
+/ccdaservice/node_modules**
+
+# Config personalizado
+.env
+sites/*/sqlconf.php
+
+# Backups
+*.sql
+*.tar.gz
+*.zip
+*.bak
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# 🔒 Seguridad / Config
+# -------------------------
+sites/default/sqlconf.php
+sites/default/config.php
+.env
+*.key
+*.pem
+*.crt
+*.cert
+*.p12
+*.bak
+
+# -------------------------
+# 🧑‍⚕️ Datos sensibles de PACIENTES
+# -------------------------
+sites/default/documents/
+sites/default/edi/
+sites/default/era/
+sites/default/logs/
+sites/default/temp/
+sites/default/upload/
+sites/default/backups/
+
+# -------------------------
+# 🗄️ Caché, runtime y sesiones
+# -------------------------
+/sites/*/cache/
+/sites/*/session/
+/sites/*/templates_c/
+
+# -------------------------
+# 🧱 Dependencias reconstruibles
+# -------------------------
+/vendor/
+/node_modules/
+/ccdaservice/node_modules
+/public/assets/*
+!/public/assets/modified
+/public/themes/*
+!/public/themes/custom   # si tenés un tema custom
+
+# -------------------------
+# 🧪 Testing y desarrollo local
+# -------------------------
+/.idea/
+/.vscode/
+/nbproject/
+/.DS_Store
+.phpunit.result.cache
+coverage/js-unit
+/build/
+dist/
+/docs/.out/
+
+# -------------------------
+# 🪵 Logs
+# -------------------------
+*.log
+/logs/
