@@ -417,7 +417,7 @@ if (!empty($_POST['form_refresh']) || !empty($_POST['form_orderby'])) {
         <?php echo ($form_orderby == "pubpid") ? " style=\"color: var(--success)\"" : ""; ?>><?php echo xlt('ID'); ?></a>
         </th>
 
-            <th><?php echo xlt('Home'); //Sorting by phone# not really useful ?></th>
+            <th><?php echo xlt('Cargado por'); //Sorting by phone# not really useful ?></th>
 
                 <th><?php echo xlt('Cell'); //Sorting by phone# not really useful ?></th>
 
@@ -515,7 +515,10 @@ if (!empty($_POST['form_refresh']) || !empty($_POST['form_orderby'])) {
 
             <td class="detail">&nbsp;<?php echo text($appointment['pubpid']) ?></td>
 
-            <td class="detail">&nbsp;<?php echo text($appointment['phone_home']) ?></td>
+            <td class="detail">&nbsp;<?php echo text(trim($appointment['cfname'] . ' ' .
+                $appointment['cmname'] . ' ' .
+                $appointment['clname']
+            )) ?></td>
 
             <td class="detail">&nbsp;<?php echo text($appointment['phone_cell']) ?></td>
 

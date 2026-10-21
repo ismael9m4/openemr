@@ -139,14 +139,35 @@ if (isset($_GET['sSearch']) && $_GET['sSearch'] !== "") {
     foreach ($aColumns as $colname) {
         $where .= $where ? " OR " : " ( ";
         if ($colname == 'name') {
-            $where .=
-                "lname LIKE ? OR " .
-                "fname LIKE ? OR " .
-                "mname LIKE ? ";
-            if ($searchMethodInPatientList) { // exact search
-                array_push($srch_bind, $sSearch, $sSearch, $sSearch);
-            } else {// like search
-                array_push($srch_bind, ($sSearch . "%"), ($sSearch . "%"), ($sSearch . "%"));
+
+            $searchText = trim(str_replace(',', ' ', $sSearch));
+            $parts = preg_split('/\s+/', $searchText);
+
+            $nameConditions = [];
+
+            foreach ($parts as $part) {
+
+                $part = trim($part);
+
+                if (strlen($part) < 2) {
+                    continue;
+                }
+
+                $nameConditions[] =
+                    "(lname LIKE ? OR fname LIKE ? OR mname LIKE ?)";
+
+                array_push(
+                    $srch_bind,
+                    "{$part}%",
+                    "{$part}%",
+                    "{$part}%"
+                );
+            }
+
+            if (!empty($nameConditions)) {
+                $where .= "(" . implode(" AND ", $nameConditions) . ")";
+            } else {
+                $where .= "1=1";
             }
         } elseif ($searchMethodInPatientList) { // exact search
             $where .= "`" . escape_sql_column_name($colname, array('patient_data')) . "` LIKE ? ";

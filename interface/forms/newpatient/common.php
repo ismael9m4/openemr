@@ -341,7 +341,13 @@ $ires = sqlStatement("SELECT id, type, title, begdate FROM lists WHERE " .
                 "WHERE fe.pid=? AND fe.date=? AND fe.provider_id=? AND f.deleted=0";
             $q_enc = sqlQuery($q, array($pid, $encnow, $override['pc_aid']));
             if (!empty($override) && is_array($override) && empty($q_enc['encounter'])) {
-                $provider_id = $override['pc_aid'];
+                
+                if ((int) $_SESSION['authUserID'] === 37) {
+                    // El administrador conserva el comportamiento actual.
+                    $provider_id = $override['pc_aid'];
+                }
+                // Para los demás usuarios se conserva su propio ID.
+
                 $default_bill_fac_override = $override['pc_billing_location'];
                 $default_fac_override = $override['pc_facility'];
                 $default_catid_override = $override['pc_catid'];

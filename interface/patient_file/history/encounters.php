@@ -220,6 +220,63 @@ function changePageSize() {
     window.location.href = "encounters.php?billing=" + encodeURIComponent(billing) + "&issue=" + encodeURIComponent(issue) + "&pagestart=" + encodeURIComponent(pagestart) + "&pagesize=" + encodeURIComponent(pagesize);
 }
 
+
+function printEncounterSummary() {
+    const summary = document.getElementById('encounter-summary-print-area');
+    if (!summary) {
+        return false;
+    }
+
+    const summaryClone = summary.cloneNode(true);
+    $(summaryClone).find('[data-toggle="PopOverReport"]').each(function() {
+        const el = this;
+        const url = "encounters_ajax.php?ptid=" + encodeURIComponent(el.dataset.formpid) +
+            "&encid=" + encodeURIComponent(el.dataset.formenc) +
+            "&formname=" + encodeURIComponent(el.dataset.formdir) +
+            "&formid=" + encodeURIComponent(el.dataset.formid) +
+            "&csrf_token_form=" + <?php echo js_url(CsrfUtils::collectCsrfToken()); ?>;
+        let fetchedReport = "";
+        $.ajax({
+            url: url,
+            method: "GET",
+            async: false,
+            beforeSend: top.restoreSession,
+            success: function(report) {
+                fetchedReport = report;
+            }
+        });
+        if (fetchedReport) {
+            const reportDiv = document.createElement("div");
+            reportDiv.className = "encounter-pdf-form-report pl-3 mt-1";
+            reportDiv.innerHTML = fetchedReport;
+            el.insertAdjacentElement("afterend", reportDiv);
+        }
+    });
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        return false;
+    }
+
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .map((node) => node.outerHTML)
+        .join('');
+
+    printWindow.document.open();
+    printWindow.document.write('<!DOCTYPE html><html><head><title><?php echo xla("Resumen de atenciones"); ?></title>' + styles);
+    printWindow.document.write('<style>body{padding:16px;} .save-summary-actions{margin-bottom:16px;} .encounter-pdf-form-report{display:block!important;border-left:3px solid #dee2e6;margin:6px 0 12px 8px;padding-left:10px;} [data-toggle="PopOverReport"]{font-weight:600;} @media print{.save-summary-actions{display:none!important;} a[href]:after{content:"";} body{padding:0;} .table-responsive{overflow:visible!important;} .encounter-pdf-form-report{display:block!important;}}</style>');
+    printWindow.document.write('</head><body>');
+    printWindow.document.write('<div class="save-summary-actions"><button type="button" onclick="window.print();" class="btn btn-primary"><?php echo xla("Guardar como PDF"); ?></button></div>');
+    printWindow.document.write('<div class="container-fluid mt-3"><h2><?php echo xla("Resumen de atenciones"); ?></h2>' + summaryClone.innerHTML + '</div>');
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onload = function() {
+        printWindow.print();
+    };
+
+    return false;
+}
 window.onload = function() {
     $("#selPagesize").on("change", changePageSize);
 }
@@ -273,6 +330,7 @@ window.onload = function() {
         <a href='encounters.php?billing=1&issue=<?php echo $issue . $getStringForPage; ?>' class="btn btn-small btn-info" onclick='top.restoreSession()' style='font-size: 11px'><?php echo xlt('To Billing View'); ?></a>
     <?php } ?>
 
+    <a href='#' class="btn btn-small btn-info ml-1" onclick='return printEncounterSummary();' style='font-size: 11px'><?php echo xlt('Guardar resumen'); ?></a>
     <span class="float-right">
         <?php echo xlt('Results per page'); ?>:
         <select class="form-control" id="selPagesize" billing="<?php echo attr($billing_view); ?>" issue="<?php echo attr($issue); ?>" pagestart="<?php echo attr($pagestart); ?>" >
@@ -298,7 +356,7 @@ window.onload = function() {
 
     <br />
 
-    <div class="table-responsive">
+    <div class="table-responsive" id="encounter-summary-print-area">
         <table class="table table-hover jumbotron py-4 mt-3">
             <thead>
                 <tr class='text'>

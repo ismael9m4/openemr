@@ -175,7 +175,7 @@ switch ($search_any_type) {
             <span class="mr-auto">
                 <a class="btn btn-secondary btn-sm" href="#" data-bind="click: viewMessages"
                     title="<?php echo xla("View Messages"); ?>">
-                    <i class="fa fa-envelope"></i>&nbsp;<span class="badge badge-primary" style="display:inline" data-bind="text: messages()"></span>
+                    <i class="fa fa-envelope"></i>&nbsp;<span class="badge badge-danger" style="display:inline" data-bind="text: messages()"></span>
                 </a>
             </span>
             <!-- /ko --><!-- messages -->

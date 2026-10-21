@@ -67,6 +67,8 @@ if (!AclMain::aclCheckCore('patients', 'appt', '', array('write','wsome'))) {
 
 /* Things that might be passed by our opener. */
 $eid           = $_GET['eid'] ?? null; // only for existing events
+
+
 $date          = $_GET['date'] ?? null;        // this and below only for new events
 $userid        = $_GET['userid'] ?? null;
 $default_catid = !empty($_GET['catid']) ? $_GET['catid'] : '5';
@@ -113,6 +115,209 @@ $g_view = AclMain::aclCheckCore("groups", "gcalendar", false, 'view');
  * @var EventDispatcherInterface $eventDispatcher
  */
 $eventDispatcher = $GLOBALS['kernel']->getEventDispatcher();
+
+
+
+/* ==========================================================
+ * CONTROL LIMITE TURNOS GRUPO FAMILIAR
+ * AJAX usado al seleccionar paciente y antes de guardar turno
+ * ========================================================== */
+if (!empty($_GET['family_limit_check'])) {
+    header('Content-Type: application/json');
+
+    $pid = (int) ($_GET['check_pid'] ?? 0);
+
+    if ($pid <= 0) {
+        echo json_encode([
+            'ok' => false,
+            'message' => 'PID inválido'
+        ]);
+        exit;
+    }
+
+    $patient = sqlQuery(
+        "SELECT pid, pubpid, ss
+         FROM patient_data
+         WHERE pid = ?",
+        [$pid]
+    );
+
+    if (!$patient) {
+        echo json_encode([
+            'ok' => false,
+            'message' => 'Paciente no encontrado'
+        ]);
+        exit;
+    }
+
+    $pubpid = trim((string) $patient['pubpid']);
+    $ss = trim((string) $patient['ss']);
+
+    if ($pubpid === '' || $ss === '') {
+        echo json_encode([
+            'ok' => true,
+            'exceeded' => false,
+            'count' => 0
+        ]);
+        exit;
+    }
+
+    // Si pubpid = ss es titular. Si no, es adherente y ss es el DNI titular.
+    $dniGrupo = ($pubpid === $ss) ? $pubpid : $ss;
+
+    $firstDay = date('Y-m-01');
+    $lastDay = date('Y-m-t');
+
+    $rowCount = sqlQuery(
+        "SELECT COUNT(*) AS cantidad
+         FROM openemr_postcalendar_events e
+         INNER JOIN patient_data p ON p.pid = e.pc_pid
+         WHERE
+            p.ss = ?
+            AND e.pc_eventDate BETWEEN ? AND ?
+            AND e.pc_pid IS NOT NULL
+            AND e.pc_pid > 0
+            AND (
+                e.pc_apptstatus IS NULL
+                OR e.pc_apptstatus = ''
+                OR e.pc_apptstatus NOT IN ('x')
+            )",
+        [$dniGrupo, $firstDay, $lastDay]
+    );
+
+    $cantidad = (int) ($rowCount['cantidad'] ?? 0);
+
+    echo json_encode([
+        'ok' => true,
+        'exceeded' => $cantidad >= 20,
+        'count' => $cantidad,
+        'dni_grupo' => $dniGrupo,
+        'message' => $cantidad >= 20
+            ? '⚠️Este grupo familiar está excediendo el límite mensual de turnos.'
+            : ''
+    ]);
+    exit;
+}
+
+/* ==========================================================
+ * CONTROL PROFESIONAL ODONTOLOGIA
+ * AJAX usado al seleccionar profesional para mostrar tipo turno
+ * ========================================================== */
+if (!empty($_GET['provider_odontologia_check'])) {
+    header('Content-Type: application/json');
+
+    $providerIds = $_GET['provider_ids'] ?? [];
+    if (!is_array($providerIds)) {
+        $providerIds = explode(',', (string) $providerIds);
+    }
+
+    $isOdontologo = false;
+    foreach ($providerIds as $providerId) {
+        if (isOdontologoProvider($providerId)) {
+            $isOdontologo = true;
+            break;
+        }
+    }
+
+    echo json_encode([
+        'ok' => true,
+        'is_odontologo' => $isOdontologo
+    ]);
+    exit;
+}
+
+/**
+ * Returns true when the selected OpenEMR provider has an odontological specialty.
+ */
+function isOdontologoProvider($providerId)
+{
+    $providerId = (int) $providerId;
+    if ($providerId <= 0) {
+        return false;
+    }
+
+    $candidateColumns = ['specialty', 'taxonomy', 'valedictory'];
+    $availableColumns = [];
+    $columnsResult = sqlStatement("SHOW COLUMNS FROM users WHERE Field IN ('specialty', 'taxonomy', 'valedictory')");
+    while ($columnRow = sqlFetchArray($columnsResult)) {
+        if (in_array($columnRow['Field'], $candidateColumns, true)) {
+            $availableColumns[] = $columnRow['Field'];
+        }
+    }
+
+    if (empty($availableColumns)) {
+        return false;
+    }
+
+    $selectColumns = implode(', ', array_map(function ($column) {
+        return "`" . $column . "`";
+    }, $availableColumns));
+
+    $providerRow = sqlQuery(
+        "SELECT " . $selectColumns . " FROM users WHERE id = ? AND authorized != 0 AND active = 1",
+        [$providerId]
+    );
+
+    if (!$providerRow) {
+        return false;
+    }
+
+    foreach ($availableColumns as $column) {
+        if (!empty($providerRow[$column]) && stripos((string) $providerRow[$column], 'odont') !== false) {
+            return true;
+        }
+    }
+
+    if (!empty($providerRow['specialty'])) {
+        $specialtyOption = sqlQuery(
+            "SELECT title FROM list_options WHERE list_id = ? AND option_id = ? AND activity = 1",
+            ['specialty', $providerRow['specialty']]
+        );
+        if (!empty($specialtyOption['title']) && stripos((string) $specialtyOption['title'], 'odont') !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Apply the dental appointment duration on the server as well as in JavaScript.
+ */
+function applyOdontologoDurationFromPost()
+{
+    if (!empty($_POST['form_allday'])) {
+        return;
+    }
+
+    $providers = $_POST['form_provider'] ?? [];
+    if (!is_array($providers)) {
+        $providers = [$providers];
+    }
+
+    $isOdontologo = false;
+    foreach ($providers as $providerId) {
+        if (isOdontologoProvider($providerId)) {
+            $isOdontologo = true;
+            break;
+        }
+    }
+
+    if (!$isOdontologo) {
+        return;
+    }
+
+    $durations = [
+        'simple' => 30,
+        'doble'  => 60,
+        'triple' => 90,
+    ];
+
+    $tipo = $_POST['odont_turno_tipo'] ?? '';
+    if (isset($durations[$tipo])) {
+        $_POST['form_duration'] = $durations[$tipo];
+    }
+}
 
 ?>
 <!DOCTYPE html>
@@ -180,6 +385,8 @@ function InsertEventFull()
             $args['starttime'] = $starttime;
             $args['endtime'] = $endtime;
             $args['locationspec'] = $locationspec;
+            //$args['practica_medica'] = $_POST['practica_medica'] ?? ''; //LO AGREGUE
+            //$args['tipo_practica'] = $_POST['tipo_practica'] ?? '';//LO AGREGUE
             $pc_eid_temp = InsertEvent($args);
             if ($pc_eid == null) {
                 $pc_eid = $pc_eid_temp;
@@ -346,6 +553,8 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "duplicate" || $_
             $tmph += 12;
         }
 
+        // Odontología: Simple=30, Doble=60, Triple=90. No se modifica la hora de inicio.
+        applyOdontologoDurationFromPost();
         $duration = abs($_POST['form_duration']); // fixes #395
     }
 
@@ -521,6 +730,8 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                     $args['starttime'] = $starttime;
                     $args['endtime'] = $endtime;
                     $args['locationspec'] = $locationspec;
+                    //$args['practica_medica'] = $_POST['practica_medica'] ?? ''; //LO AGREGUE
+                    //$args['tipo_practica'] = $_POST['tipo_practica'] ?? '';//LO AGREGUE
                     InsertEvent($args);
                 }
             } elseif ($_POST['recurr_affect'] == 'future') { // ===== Future Recurring events of a repeating series =====
@@ -558,6 +769,8 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                     $args['starttime'] = $starttime;
                     $args['endtime'] = $endtime;
                     $args['locationspec'] = $locationspec;
+                    //$args['practica_medica'] = $_POST['practica_medica'] ?? ''; //LO AGREGUE
+                    //$args['tipo_practica'] = $_POST['tipo_practica'] ?? '';//LO AGREGUE
                     InsertEvent($args);
                 }
             } else {
@@ -634,7 +847,9 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                     "pc_apptstatus = '" . add_escape_custom($_POST['form_apptstatus']) . "', "  .
                     "pc_prefcatid = '" . add_escape_custom($_POST['form_prefcat']) . "' ,"  .
                     "pc_facility = '" . add_escape_custom((int)$_POST['facility']) . "' ,"  . // FF stuff
-                    "pc_billing_location = '" . add_escape_custom((int)$_POST['billing_facility']) . "' "  .
+                    "pc_billing_location = '" . add_escape_custom((int)$_POST['billing_facility']) . "', "  .
+                    "practica_medica = '" . add_escape_custom($_POST['practica_medica'] ?? '') . "', " .
+                    "tipo_practica = '" . add_escape_custom($_POST['tipo_practica'] ?? '') . "' " .
                     "WHERE pc_aid = '" . add_escape_custom($provider) . "' AND pc_multiple = '" . add_escape_custom($row['pc_multiple'])  . "'");
                 } // foreach
             }
@@ -679,6 +894,8 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                 $args['starttime'] = $starttime;
                 $args['endtime'] = $endtime;
                 $args['locationspec'] = $locationspec;
+                //$args['practica_medica'] = $_POST['practica_medica'] ?? ''; //LO AGREGUE
+                //$args['tipo_practica'] = $_POST['tipo_practica'] ?? '';//LO AGREGUE
                 InsertEvent($args);
             } elseif ($_POST['recurr_affect'] == 'future') {
                 // mod original event to stop recurring on this date-1
@@ -730,8 +947,11 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                 "pc_apptstatus = '" . add_escape_custom($_POST['form_apptstatus']) . "', "  .
                 "pc_prefcatid = '" . add_escape_custom($_POST['form_prefcat']) . "' ,"  .
                 "pc_facility = '" . add_escape_custom((int)$_POST['facility']) . "' ,"  . // FF stuff
-                "pc_billing_location = '" . add_escape_custom((int)$_POST['billing_facility']) . "' "  .
+                "pc_billing_location = '" . add_escape_custom((int)$_POST['billing_facility']) . "', "  .
+                "practica_medica = '" . add_escape_custom($_POST['practica_medica'] ?? '') . "', " .
+                "tipo_practica = '" . add_escape_custom($_POST['tipo_practica'] ?? '') . "' " .
                 "WHERE pc_eid = '" . add_escape_custom($eid) . "'");
+
             }
         }
 
@@ -766,6 +986,9 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
 }
 
 if (!empty($_POST['form_action'])) {
+    //if (!empty($_SESSION['pid']) && !empty($_POST['form_pid']) && (string) $_SESSION['pid'] === (string) $_POST['form_pid']) {
+    //    unset($_SESSION['pid']);
+    //}
     $closeEvent = new AppointmentDialogCloseEvent();
     $closeEvent->setDialogAction($_POST['form_action']);
     $closeEventData = ['form_action' => $_POST['form_action']];
@@ -782,9 +1005,9 @@ if (!empty($_POST['form_action'])) {
     }
     // Close this window and refresh the calendar (or the patient_tracker) display.
     echo "<html>\n<body>\n<script>\n";
-    if ($info_msg) {
-        echo " alert('" . addslashes($info_msg) . "');\n";
-    }
+    //if ($info_msg) {
+    //    echo " alert('" . addslashes($info_msg) . "');\n";
+    //}
     echo " if (opener && !opener.closed && opener.refreshme) {\n " .
       "  opener.refreshme();\n " . // This is for standard calendar page refresh
       " } else {\n " .
@@ -805,6 +1028,7 @@ if (!empty($_REQUEST['patientid'])) {
 } elseif (!empty($_SESSION['pid'])) {
     $patientid = ($_SESSION['pid']);
 }
+
     $patientname = null;
     $patienttitle = array();
     $pcroom = "";
@@ -822,11 +1046,14 @@ if (!empty($_REQUEST['groupid'])) {
 if ($eid) {
     // $row = sqlQuery("SELECT * FROM openemr_postcalendar_events WHERE pc_eid = $eid");
 
-    $row = sqlQuery("SELECT e.*, u.fname, u.mname, u.lname " .
+   $row = sqlQuery("SELECT e.*, u.fname, u.mname, u.lname,
+        uc.fname AS cfname, uc.mname AS cmname, uc.lname AS clname " .
       "FROM openemr_postcalendar_events AS e " .
       "LEFT OUTER JOIN users AS u ON u.id = e.pc_informant " .
+      "LEFT OUTER JOIN users AS uc ON uc.id = e.pc_create_by " .
       "WHERE pc_eid = ?", array($eid));
     $informant = $row['fname'] . ' ' . $row['mname'] . ' ' . $row['lname'];
+    $creator = $row['cfname'] . ' ' . $row['cmname'] . ' ' . $row['clname'];
 
     // instead of using the event's starting date, keep what has been provided
     // via the GET array, see the top of this file
@@ -838,6 +1065,10 @@ if ($eid) {
     $userid = $row['pc_aid'];
     $patientid = $row['pc_pid'];
     $groupid = $row['pc_gid'];
+
+   
+
+
     $starttimeh = substr($row['pc_startTime'], 0, 2) + 0;
     $starttimem = substr($row['pc_startTime'], 3, 2);
     $repeats = $row['pc_recurrtype'];
@@ -922,7 +1153,7 @@ if ($groupid) {
 }
 
  // Get the providers list.
-    $ures = sqlStatement("SELECT id, username, fname, lname FROM users WHERE " .
+    $ures = sqlStatement("SELECT id, username, fname, lname, specialty, valedictory FROM users WHERE " .
     "authorized != 0 AND active = 1 ORDER BY lname, fname");
 
  // Get event categories.
@@ -1003,7 +1234,17 @@ while ($crow = sqlFetchArray($cres)) {
         }
     }
 
-    $catoptions .= ">" . text(xl_appt_category($crow['pc_catname'])) . "</option>\n";
+    $catoptions .= ">" . text(xl_appt_category($crow['pc_catname'])) . "</option>
+";
+}
+
+$odontTurnoTipoInicial = '';
+if ($thisduration == 30) {
+    $odontTurnoTipoInicial = 'simple';
+} elseif ($thisduration == 60) {
+    $odontTurnoTipoInicial = 'doble';
+} elseif ($thisduration == 90) {
+    $odontTurnoTipoInicial = 'triple';
 }
 ?>
 
@@ -1014,14 +1255,20 @@ function setpatient(pid, lname, fname, dob) {
     var f = document.forms[0];
     f.form_patient.value = lname + ', ' + fname;
     f.form_pid.value = pid;
+
+    checkFamilyAppointmentLimit(pid, true);
+
     dobstyle = (dob == '' || dob.substr(5, 10) == '00-00') ? '' : 'none';
     document.getElementById('dob_row').style.display = dobstyle;
+
     let event = new CustomEvent('openemr:appointment:patient:set', {
-        bubbles: true
-        ,detail: {form: f, pid: pid, lname: lname, fname: fname, dob: dob}
+        bubbles: true,
+        detail: {form: f, pid: pid, lname: lname, fname: fname, dob: dob}
     });
+
     f.dispatchEvent(event);
 }
+
 
 // This invokes the find-patient popup.
 function sel_patient() {
@@ -1054,6 +1301,192 @@ function sel_group() {
 
 // Do whatever is needed when a new event category is selected.
 // For now this means changing the event title and duration.
+// ==========================================================
+// ODONTOLOGÍA: duración Simple / Doble / Triple
+// ==========================================================
+var selectedProviderOdontologo = false;
+var odontologoCheckRequest = null;
+
+function getSelectedProviderElements() {
+    var f = document.forms[0];
+    if (!f || !f.form_provider) {
+        return [];
+    }
+
+    var provider = f.form_provider;
+    var elements = [];
+
+    if (provider.options) {
+        for (var i = 0; i < provider.options.length; i++) {
+            if (provider.options[i].selected) {
+                elements.push(provider.options[i]);
+            }
+        }
+    }
+
+    return elements;
+}
+
+function getSelectedProviderIds() {
+    var providers = getSelectedProviderElements();
+    var ids = [];
+
+    for (var i = 0; i < providers.length; i++) {
+        if (providers[i].value) {
+            ids.push(providers[i].value);
+        }
+    }
+
+    return ids;
+}
+
+function isSelectedProviderOdontologoFromOptions() {
+    var providers = getSelectedProviderElements();
+
+    for (var i = 0; i < providers.length; i++) {
+        if (providers[i].getAttribute('data-odontologo') === '1') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function refreshOdontologoProviderState() {
+    var providerIds = getSelectedProviderIds();
+
+    if (!providerIds.length) {
+        selectedProviderOdontologo = false;
+        applyOdontologoDuration();
+        return;
+    }
+
+    if (odontologoCheckRequest) {
+        odontologoCheckRequest.abort();
+    }
+
+    odontologoCheckRequest = $.ajax({
+        url: window.location.pathname,
+        method: 'GET',
+        dataType: 'json',
+        data: {
+            provider_odontologia_check: 1,
+            provider_ids: providerIds.join(',')
+        },
+        success: function (data) {
+            selectedProviderOdontologo = !!(data && data.ok && data.is_odontologo);
+            applyOdontologoDuration();
+        },
+        error: function () {
+            selectedProviderOdontologo = isSelectedProviderOdontologoFromOptions();
+            applyOdontologoDuration();
+        },
+        complete: function () {
+            odontologoCheckRequest = null;
+        }
+    });
+}
+
+function applyOdontologoDuration() {
+    var f = document.forms[0];
+    var row = document.getElementById('odontologia_duration_row');
+    
+
+    if (!row || !f || !f.form_duration) {
+        return;
+    }
+
+    var odontologo = selectedProviderOdontologo || isSelectedProviderOdontologoFromOptions();
+    row.style.display = odontologo ? '' : 'none';
+
+   
+
+    if (!odontologo) {
+        return;
+    }
+
+    var selected = document.querySelector('input[name="odont_turno_tipo"]:checked');
+    if (selected) {
+        setOdontologoDuration(selected.value);
+        return;
+    }
+
+    var currentDuration = parseInt(f.form_duration.value, 10);
+    var inferred = '';
+    if (currentDuration === 30) {
+        inferred = 'simple';
+    } else if (currentDuration === 60) {
+        inferred = 'doble';
+    } else if (currentDuration === 90) {
+        inferred = 'triple';
+    }
+
+    if (inferred) {
+        var radio = document.querySelector(
+            'input[name="odont_turno_tipo"][value="' + inferred + '"]'
+        );
+        if (radio) {
+            radio.checked = true;
+            setOdontologoDuration(inferred);
+        }
+    }
+}
+
+function clearOdontologoTurnoSelection() {
+    var radios = document.querySelectorAll('input[name="odont_turno_tipo"]');
+    for (var i = 0; i < radios.length; i++) {
+        radios[i].checked = false;
+    }
+}
+
+function clearOdontologoTurnoWhenDurationEdited() {
+    var f = document.forms[0];
+    if (!f || !f.form_duration) {
+        return;
+    }
+
+    $(f.form_duration).on('input change', function () {
+        clearOdontologoTurnoSelection();
+    });
+}
+
+function setOdontologoDuration(tipo) {
+    var f = document.forms[0];
+    if (!f || !f.form_duration) {
+        return;
+    }
+
+    var durations = {
+        simple: 30,
+        doble: 60,
+        triple: 90
+    };
+
+    if (durations[tipo]) {
+        // Only duration changes; start hour/minute remain untouched.
+        f.form_duration.value = durations[tipo];
+    }
+}
+
+function toggleAdvancedOptions() {
+    var panel = document.getElementById('advanced_options');
+    var button = document.getElementById('advanced_options_button');
+
+    if (!panel || !button) {
+        return;
+    }
+
+    var visible = panel.style.display !== 'none';
+    panel.style.display = visible ? 'none' : '';
+    button.innerHTML = visible
+        ? 'Opciones avanzadas &#9660;'
+        : 'Opciones avanzadas &#9650;';
+}
+
+$(document).on('change', '#provd', function () {
+    refreshOdontologoProviderState();
+});
+
 function set_display() {
     var f = document.forms[0];
     var s = f.form_category;
@@ -1378,61 +1811,103 @@ $classpati = '';
         <input class="form-control" type='text' size='10' name='form_title' id='form_title' value='<?php echo attr($row['pc_title'] ?? ''); ?>' title='<?php echo xla('Event title'); ?>' />
     </div>
 </div>
-
-<!-- Botón para mostrar prácticas -->
+<!-- Codigo injertado by Ing. Ismael + IA-->
+<!-- Practicas medicas -->
 <div class="form-row mx-2">
     <div class="col-sm form-group">
-        <button type="button" class="btn btn-outline-primary" onclick="togglePracticas()">
-            <?php echo xlt('Seleccionar práctica'); ?>
+        <button type="button" class="btn btn-outline-primary" id="btn_practicas">
+            <?php echo xlt('Practica'); ?>
         </button>
     </div>
 </div>
 
-<!-- Campo oculto de prácticas -->
 <div class="form-row mx-2" id="practicas_container" style="display: none;">
     <div class="col-sm form-group">
-        <label><?php echo xlt('Práctica médica'); ?>:</label>
+        <label for="practica_medica"><?php echo xlt('Especialidad'); ?>:</label>
+        <select class="form-control" name="practica_medica" id="practica_medica">
+            <option value=""><?php echo xlt('Seleccione'); ?></option>
+            <option value="cardiologia" <?php echo (($row['practica_medica'] ?? '') == 'cardiologia') ? 'selected' : ''; ?>>
+                Cardiologia
+            </option>
+            <option value="ginecologia" <?php echo (($row['practica_medica'] ?? '') == 'ginecologia') ? 'selected' : ''; ?>>
+                Ginecologia
+            </option>
+        </select>
+    </div>
 
-        <!-- Grupo: Cardiología -->
-        <fieldset class="border p-2 rounded mb-2">
-            <legend class="w-auto px-2" style="font-size: 1rem;"><?php echo xlt('Cardiología'); ?></legend>
-            <?php
-            $cardiologia = ['Consultas', 'ECG', 'Ergometría', 'MAPA', 'Holter', 'Ecodoppler'];
-            foreach ($cardiologia as $i => $practica) {
-                $value = strtolower(str_replace(' ', '_', $practica));
-                echo "<div class='form-check'>
-                        <input class='form-check-input' type='radio' name='form_practica' id='cardio_$i' value='$value'>
-                        <label class='form-check-label' for='cardio_$i'>" . text($practica) . "</label>
-                    </div>";
-            }
-            ?>
-        </fieldset>
-
-        <!-- Grupo: Ginecología -->
-        <fieldset class="border p-2 rounded">
-            <legend class="w-auto px-2" style="font-size: 1rem;"><?php echo xlt('Ginecología'); ?></legend>
-            <?php
-            $ginecologia = ['Consultas', 'PAP', 'Colocación DIU'];
-            foreach ($ginecologia as $i => $practica) {
-                $value = strtolower(str_replace(' ', '_', $practica));
-                echo "<div class='form-check'>
-                        <input class='form-check-input' type='radio' name='form_practica' id='gine_$i' value='$value'>
-                        <label class='form-check-label' for='gine_$i'>" . text($practica) . "</label>
-                    </div>";
-            }
-            ?>
-        </fieldset>
+    <div class="col-sm form-group">
+        <label for="tipo_practica"><?php echo xlt('Sub practica'); ?>:</label>
+        <select class="form-control" name="tipo_practica" id="tipo_practica"
+                data-selected="<?php echo attr($row['tipo_practica'] ?? ''); ?>">
+            <option value=""><?php echo xlt('Seleccione'); ?></option>
+        </select>
     </div>
 </div>
 
-<!-- JavaScript para mostrar/ocultar -->
 <script>
-    function togglePracticas() {
-        const container = document.getElementById('practicas_container');
-        container.style.display = container.style.display === 'none' ? 'block' : 'none';
-    }
-</script>
+(function () {
+    const subPracticas = {
+        cardiologia: [
+            { value: 'consulta_cardiologica', label: 'Consulta cardiologica' },
+            { value: 'ecg', label: 'ECG' },
+            { value: 'ergometria', label: 'Ergometria' },
+            { value: 'mapa', label: 'MAPA' },
+            { value: 'holter', label: 'Holter' },
+            { value: 'ecodoppler', label: 'Ecodoppler' }
+        ],
+        ginecologia: [
+            { value: 'consulta_ginecologica', label: 'Consulta ginecologica' },
+            { value: 'pap', label: 'PAP' },
+            { value: 'colocacion_diu', label: 'Colocacion DIU' },
+            { value: 'control_embarazo', label: 'Control embarazo' },
+            { value: 'ecografia_ginecologica', label: 'Ecografia ginecologica' }
+        ]
+    };
 
+    const btnPracticas = document.getElementById('btn_practicas');
+    const container = document.getElementById('practicas_container');
+    const especialidad = document.getElementById('practica_medica');
+    const subPractica = document.getElementById('tipo_practica');
+
+    function cargarSubPracticas() {
+        const seleccion = especialidad.value;
+        const selectedActual = subPractica.getAttribute('data-selected') || '';
+
+        subPractica.innerHTML = '<option value="">Seleccione</option>';
+
+        if (!seleccion || !subPracticas[seleccion]) {
+            return;
+        }
+
+        subPracticas[seleccion].forEach(function (item) {
+            const option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label;
+
+            if (item.value === selectedActual) {
+                option.selected = true;
+            }
+
+            subPractica.appendChild(option);
+        });
+    }
+
+    btnPracticas.addEventListener('click', function () {
+        container.style.display = container.style.display === 'none' ? 'flex' : 'none';
+    });
+
+    especialidad.addEventListener('change', function () {
+        subPractica.setAttribute('data-selected', '');
+        cargarSubPracticas();
+    });
+
+    if (especialidad.value) {
+        container.style.display = 'flex';
+        cargarSubPracticas();
+    }
+})();
+</script>
+<!-- Fin Codigo injertado by Ing. Ismael + IA-->
 
 
 <div class="form-row mx-2">
@@ -1568,7 +2043,12 @@ $style = $hasAccess ? '' : ' style="display:none"';
         // build the selection tool
         echo "<select class='form-control' name='form_provider[]' id='provd' multiple='multiple' size='5' >";
         while ($urow = sqlFetchArray($ures)) {
-            echo "    <option value='" . attr($urow['id']) . "'";
+            $isOdontologo = (!empty($urow['specialty']) &&
+                stripos((string) $urow['specialty'], 'odont') !== false) ||
+                (!empty($urow['valedictory']) &&
+                stripos((string) $urow['valedictory'], 'odont') !== false);
+            echo "    <option value='" . attr($urow['id']) . "' data-odontologo='" .
+                ($isOdontologo ? '1' : '0') . "'";
             if ($userid) {
                 if (in_array($urow['id'], $providers_array) || ($urow['id'] == $userid)) {
                     echo " selected";
@@ -1612,7 +2092,12 @@ $style = $hasAccess ? '' : ' style="display:none"';
         }
         echo "<select class='form-control' name='form_provider' id='provd'>";
         while ($urow = sqlFetchArray($ures)) {
-            echo "    <option value='" . attr($urow['id']) . "'";
+            $isOdontologo = (!empty($urow['specialty']) &&
+                stripos((string) $urow['specialty'], 'odont') !== false) ||
+                (!empty($urow['valedictory']) &&
+                stripos((string) $urow['valedictory'], 'odont') !== false);
+            echo "    <option value='" . attr($urow['id']) . "' data-odontologo='" .
+                ($isOdontologo ? '1' : '0') . "'";
             if ($urow['id'] == $defaultProvider) {
                 echo " selected";
             }
@@ -1655,10 +2140,6 @@ function isRegularRepeat($repeat)
 ?>
 <div class="jumbotron jumbotron-fluid px-3 py-4 my-2">
     <div class="form-row mb-sm-2">
-        <div class='col-sm-2 form-check form-check-inline'>
-            <input type='radio' class='form-check-input' name='form_allday' onclick='set_allday()' value='1' id='rballday1'<?php echo ($thisduration == 1440) ? " checked" : ""; ?> />
-            <label for="rballday1" class='form-check-label' id='tdallday1'><?php echo xlt('All day event'); ?></label>
-        </div>
         <label class='col-sm col-form-label' for='form_date'><?php echo xlt('Date'); ?>:</label>
         <input class="col-sm-2 form-control datepicker" type='text' size='10' name='form_date' id='form_date' value='<?php echo attr(oeFormatShortDate($date)) ?>' title='<?php echo xla('event date or starting date'); ?>' onchange='dateChanged()' />
         <div class='col-sm form-check form-check-inline'>
@@ -1675,8 +2156,50 @@ function isRegularRepeat($repeat)
         <?php endif ?>
         <label class='col-sm col-form-label' id='tdallday4'><?php echo xlt('duration'); ?></label>
         <input class="col-sm form-control" id='tdallday5' type='text' size='4' name='form_duration' value='<?php echo attr($thisduration) ?>' title='<?php echo xla('Event duration in minutes'); ?>' />
+
+        <div class="col-sm-12 mt-2" id="odontologia_duration_row" style="display:none;">
+            <div class="border rounded p-2">
+                <strong>Turno odontológico</strong>
+                <div class="mt-2">
+                    <label class="mr-3">
+                        <input type="radio" name="odont_turno_tipo" value="simple"
+                            onclick="setOdontologoDuration('simple')"
+                            <?php echo ($odontTurnoTipoInicial === 'simple') ? 'checked' : ''; ?> />
+                        Simple — 30 minutos
+                    </label>
+                    <label class="mr-3">
+                        <input type="radio" name="odont_turno_tipo" value="doble"
+                            onclick="setOdontologoDuration('doble')"
+                            <?php echo ($odontTurnoTipoInicial === 'doble') ? 'checked' : ''; ?> />
+                        Doble — 60 minutos
+                    </label>
+                    <label>
+                        <input type="radio" name="odont_turno_tipo" value="triple"
+                            onclick="setOdontologoDuration('triple')"
+                            <?php echo ($odontTurnoTipoInicial === 'triple') ? 'checked' : ''; ?> />
+                        Triple — 90 minutos
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-12 mt-2">
+            <button type="button" class="btn btn-link p-0" id="advanced_options_button"
+                    onclick="toggleAdvancedOptions()">
+                Opciones avanzadas &#9660;
+            </button>
+        </div>
     </div>
-    <div class="form-row mb-sm-2">
+
+    <div id="advanced_options" style="display:none;">
+        <div class="form-row mb-sm-2">
+            <div class='col-sm-3 form-check form-check-inline'>
+                <input type='radio' class='form-check-input' name='form_allday' onclick='set_allday()' value='1' id='rballday1'<?php echo ($thisduration == 1440) ? " checked" : ""; ?> />
+                <label for="rballday1" class='form-check-label' id='tdallday1'><?php echo xlt('All day event'); ?></label>
+            </div>
+        </div>
+
+    <div class="form-row mb-sm-2" id="repeat_row">
         <div class="col-sm form-check-inline">
             <input class='form-check-input' type='checkbox' name='form_repeat' id="form_repeat" onclick='set_repeat(this)' value='1'<?php echo (isRegularRepeat($repeats)) ? " checked" : ""; ?>/>
             <label class='form-check-label' id='tdrepeat1'><?php echo xlt('Repeats'); ?></label>
@@ -1763,6 +2286,7 @@ function isRegularRepeat($repeat)
             ?>
         </div>
     </div>
+    </div>
 </div>
 <div class="form-row mx-2">
     <div class="col-sm form-group">
@@ -1824,14 +2348,50 @@ if (empty($_GET['prov'])) { ?>
     <input class="col-sm mx-sm-2 my-2 my-sm-auto btn btn-secondary" type='button' name='form_duplicate' id='form_duplicate' value='<?php echo xla('Create Duplicate'); ?>' />
 </div>
 <?php if ($informant) {
-    echo "<label><p class='text'>" . xlt('Last update by') . " " .
-    text($informant) . " " . xlt('on') . " " . text($row['pc_time']) . "</p></label>\n";
+    echo "<label><p class='text'>" .
+    xlt('Last update by') . " " . text($informant) . " " .
+    xlt('on') . " " . text($row['pc_time']) .
+    " - Turno creado por: " . text($creator) .
+    "</p></label>\n";
 } ?>
 
 </form><!-- This ends our form. The rest is action items-->
 
 </div> <!-- top container wrapper -->
+<!-- agregado inicio -->
+<div class="modal fade" id="familyLimitModal" tabindex="-1" role="dialog" aria-labelledby="familyLimitModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-warning">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="familyLimitModalLabel">Advertencia</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
 
+            <div class="modal-body">
+                <div style="font-size: 32px;">⚠️</div>
+                <p class="mb-2">
+                    <strong>Este grupo familiar está excediendo el límite mensual de turnos.</strong>
+                </p>
+                <p class="mb-0">
+                    Turnos del mes actual: <strong id="familyLimitCount">0</strong>
+                </p>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    Revisar
+                </button>
+                <button type="button" class="btn btn-warning" id="familyLimitContinue">
+                    Continuar igual
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- agregado inicio -->
 <!-- form support functions-->
 <script>
 /* Form init functions */
@@ -1843,6 +2403,8 @@ if (empty($_GET['prov'])) { ?>
 set_allday();
 set_repeat();
 set_days_every_week();
+refreshOdontologoProviderState();
+clearOdontologoTurnoWhenDurationEdited();
 /* and get it on with some javascript */
 $(function () {
     $("#form_save").click(function (e) {
@@ -1910,6 +2472,63 @@ function are_days_checked(){
 * validation on the form with new client side validation (using validate.js).
 * this enable to add new rules for this form in the pageValidation list.
 * */
+var familyLimitExceeded = false;
+var familyLimitAccepted = false;
+var pendingSaveValue = null;
+
+var appointmentEditPid = <?php echo (!empty($eid) && !empty($patientid)) ? (int) $patientid : 0; ?>;
+var appointmentContextCleared = false;
+
+
+
+function showFamilyLimitModal(count) {
+    $('#familyLimitCount').text(count || 20);
+    $('#familyLimitModal').modal('show');
+}
+
+function checkFamilyAppointmentLimit(pid, showModal) {
+    if (!pid) {
+        familyLimitExceeded = false;
+        familyLimitAccepted = false;
+        return;
+    }
+
+    $.ajax({
+        url: 'add_edit_event.php',
+        method: 'GET',
+        dataType: 'json',
+        data: {
+            family_limit_check: 1,
+            check_pid: pid
+        },
+        success: function (data) {
+            familyLimitExceeded = !!(data && data.ok && data.exceeded);
+            familyLimitAccepted = false;
+
+            if (familyLimitExceeded && showModal) {
+                showFamilyLimitModal(data.count);
+            }
+        }
+    });
+}
+$(function () {
+    var pidInicial = $('input[name="form_pid"]').val();
+    if (pidInicial) {
+        checkFamilyAppointmentLimit(pidInicial, true);
+    }
+});
+
+$('#familyLimitContinue').on('click', function () {
+    familyLimitAccepted = true;
+    $('#familyLimitModal').modal('hide');
+
+    if (pendingSaveValue) {
+        var value = pendingSaveValue;
+        pendingSaveValue = null;
+        validateform(null, value);
+    }
+});
+
 var collectvalidation = <?php echo $collectthis; ?>;
 function validateform(event,valu){
     $('#form_save').attr('disabled', true);
@@ -1981,8 +2600,18 @@ function validateform(event,valu){
     }
     <?php endif; ?>
 
+//agregado inicio
+    if (valu == 'save' && familyLimitExceeded && !familyLimitAccepted) {
+        pendingSaveValue = valu;
+        showFamilyLimitModal($('#familyLimitCount').text() || 20);
+        $('#form_save').attr('disabled', false);
+        return false;
+    }
+
     SubmitForm();
 }
+
+//agregado final 
 
 // disable all the form elements outside the recurr_popup
 function DisableForm() {
@@ -2020,17 +2649,16 @@ function deleteEvent() {
 function SubmitForm() {
     var f = document.forms[0];
     <?php if (!($GLOBALS['select_multi_providers']) && empty($_GET['prov'])) { // multi providers appt is not supported by check slot avail window, so skip. && is not provider tab. ?>
+    //Inicio Modificado
     if (f.form_action.value != 'delete') {
-        // Check slot availability.
-        var mins = parseInt(f.form_hour.value) * 60 + parseInt(f.form_minute.value);
-        <?php if ($GLOBALS['time_display_format']  == 1) :
-            ?>if (f.form_ampm.value == '2' && mins < 720) mins += 720;<?php endif ?>
-        find_available('&cktime=' + mins);
+        top.restoreSession();
+        f.submit();
     }
     else {
         top.restoreSession();
         f.submit();
     }
+    //Fin Modificado
     <?php } else { ?>
         <?php
     /*Support Multi-Provider Events in features*/
@@ -2054,7 +2682,6 @@ function SubmitForm() {
     top.restoreSession();
     f.submit();
     <?php } ?>
-
     return true;
 }
 </script>

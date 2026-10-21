@@ -163,7 +163,7 @@ function fetchEvents($from_date, $to_date, $where_param = null, $orderby_param =
         "e.pc_title, e.pc_hometext, e.pc_apptstatus, " .
         "p.fname, p.mname, p.lname, p.DOB, p.pid, p.pubpid, p.phone_home, p.phone_cell, " .
         "p.hipaa_allowsms, p.phone_home, p.phone_cell, p.hipaa_voice, p.hipaa_allowemail, p.email, " .
-        "u.fname AS ufname, u.mname AS umname, u.lname AS ulname, u.id AS uprovider_id, " .
+        "u.fname AS ufname, u.mname AS umname, u.lname AS ulname, u.id AS uprovider_id, uc.fname AS cfname, uc.mname AS cmname, uc.lname AS clname, " .
         "f.name, " .
         "$tracker_fields" .
         "c.pc_catname, c.pc_catid, e.pc_facility " .
@@ -172,6 +172,7 @@ function fetchEvents($from_date, $to_date, $where_param = null, $orderby_param =
         "LEFT OUTER JOIN facility AS f ON e.pc_facility = f.id " .
         "LEFT OUTER JOIN patient_data AS p ON p.pid = e.pc_pid " .
         "LEFT OUTER JOIN users AS u ON u.id = e.pc_aid " .
+        "LEFT OUTER JOIN users AS uc ON uc.id = e.pc_create_by " .
         "LEFT OUTER JOIN openemr_postcalendar_categories AS c ON c.pc_catid = e.pc_catid " .
         "WHERE $where " .
         "ORDER BY $order_by";

@@ -483,12 +483,12 @@ $title = $drug_id ? xl("Update Drug") : xl("Add Drug");
         <?php echo xlt('Combining Lots'); ?>
     </div>
 
-    <div class="form-group mt-3">
+    <div class="form-group mt-3" style="display:none;">
         <label><?php echo xlt('NDC Number'); ?>:</label>
         <input class="form-control w-100" size="40" name="form_ndc_number" maxlength="20" value='<?php echo attr($row['ndc_number']) ?>' onkeyup='maskkeyup(this,"<?php echo attr(addslashes($GLOBALS['gbl_mask_product_id'])); ?>")' onblur='maskblur(this,"<?php echo attr(addslashes($GLOBALS['gbl_mask_product_id'])); ?>")' />
     </div>
 
-    <div class="form-group mt-3">
+    <div class="form-group mt-3" style="display:none;">
         <label><?php echo xlt('RXCUI Code'); ?>:</label>
         <input class="form-control w-100" type="text" size="50" name="form_drug_code" value='<?php echo attr($row['drug_code']) ?>'
              onclick='sel_related("?codetype=RXCUI&limit=1&target_element=form_drug_code")' title='<?php echo xla('Click to select RXCUI code'); ?>' data-toggle="tooltip" data-placement="top" readonly />
@@ -499,7 +499,7 @@ $title = $drug_id ? xl("Update Drug") : xl("Add Drug");
         <input class="form-control" size="5" name="form_on_order" maxlength="7" value='<?php echo attr($row['on_order']) ?>' />
     </div>
 
-    <div class="form-group mt-3">
+    <div class="form-group mt-3" style="display:none;">
         <label><?php echo xlt('Limits'); ?>:</label>
         <table class="table table-borderless pl-5">
             <tr>
@@ -568,8 +568,8 @@ $title = $drug_id ? xl("Update Drug") : xl("Add Drug");
         ?>
     </div>
 
-    <div class="form-group mt-3 drugsonly">
-        <label><?php echo xlt('Size'); ?>:</label>
+    <div class="form-group mt-3 drugsonly" >
+        <label><?php echo xlt('Volumen o peso total'); ?>:</label>
         <input class="form-control" size="5" name="form_size" maxlength="7" value='<?php echo attr($row['size']) ?>' />
     </div>
 
@@ -592,13 +592,13 @@ $title = $drug_id ? xl("Update Drug") : xl("Add Drug");
         <input class="form-control" size="10" name="form_cyp_factor" maxlength="20" value='<?php echo attr($row['cyp_factor']) ?>' />
     </div>
 
-    <div class="form-group mt-3 drugsonly">
+    <div class="form-group mt-3 drugsonly " style="display:none;">
         <label><?php echo xlt('Relate To'); ?>:</label>
         <input class="form-control w-100" type="text" size="50" name="form_related_code" value='<?php echo attr($row['related_code']) ?>'
              onclick='sel_related("?target_element=form_related_code")' title='<?php echo xla('Click to select related code'); ?>' data-toggle="tooltip" data-placement="top" readonly />
     </div>
 
-    <div class="form-group mt-3">
+    <div class="form-group mt-3" style="display:none;">
         <label>
             <?php echo $GLOBALS['sell_non_drug_products'] == 2 ? xlt('Fees') : xlt('Templates'); ?>:
         </label>

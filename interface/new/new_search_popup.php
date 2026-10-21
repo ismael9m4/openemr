@@ -154,9 +154,28 @@ $simpleSearch = $_GET['simple_search'] ?? null;
         while ($row = sqlFetchArray($rez)) {
             $result[] = $row;
         }
+        //MOdificacion
+        $pubpid_matched = false;
+        foreach ($result as $iter) {
+            if ((int) ($iter['relevance'] ?? 0) > 999) {
+                $pubpid_matched = true;
+                break;
+            }
+        }
+        //finModificacion
         _set_patient_inc_count($MAXSHOW, count($result), $where, $sqlBindArraySpecial);
         ?>
     </form>
+    <?php if (!$pubpid_matched) { ?>
+        <div class="text-center my-3">
+            <button class="btn btn-primary my-1" type="button" value="true" onclick='dlgclose("srcConfirmSave", false);'>
+                <?php echo xla('Confirm Create New Patient'); ?>
+            </button>
+            <button class="btn btn-primary my-1" type="button" value="Cancel" onclick="dlgclose();">
+                <?php echo xla('Cancel'); ?>
+            </button>
+        </div>
+    <?php } ?>
     <div class="table-responsive">
         <table class="table border-0" cellpadding='5' cellspacing='0'>
             <tr>
@@ -217,7 +236,7 @@ $simpleSearch = $_GET['simple_search'] ?? null;
             </thead>
             <tr id="searchResults">
                 <?php
-                $pubpid_matched = false;
+                //$pubpid_matched = false;
                 if ($result) {
                     foreach ($result as $iter) {
                         $relevance = $iter['relevance'];

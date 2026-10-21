@@ -600,7 +600,7 @@ $title = $lot_id ? xl("Update Lot") : xl("Add Lot");
   </td>
  </tr>
 
- <tr>
+ <tr style="display:none;">
   <td class="text-nowrap align-top"><?php echo xlt('Transaction Type'); ?>:</td>
   <td>
    <select name='form_trans_type' class='form-control' onchange='trans_type_changed()'>
@@ -651,7 +651,7 @@ foreach (
   </td>
  </tr>
 
- <tr id='row_manufacturer'>
+ <tr id='row_manufacturer' style="display:none;">
   <td class="text-nowrap align-top"><?php echo xlt('Manufacturer'); ?>:</td>
   <td>
    <input class="form-control w-100" type='text' size='40' name='form_manufacturer' maxlength='250' value='<?php echo attr($row['manufacturer']) ?>' />
@@ -667,7 +667,7 @@ foreach (
   </td>
  </tr>
 
- <tr id='row_source_lot'>
+ <tr id='row_source_lot' style="display:none;">
   <td class="text-nowrap align-top"><?php echo xlt('Source Lot'); ?>:</td>
   <td>
    <select name='form_source_lot' class='form-control'>
@@ -704,7 +704,7 @@ while ($lrow = sqlFetchArray($lres)) {
   </td>
  </tr>
 
- <tr id='row_vendor'>
+ <tr id='row_vendor' style="display:none;">
   <td class="text-nowrap align-top"><?php echo xlt('Vendor'); ?>:</td>
   <td>
 <?php
@@ -751,7 +751,7 @@ if (
   </td>
  </tr>
 
- <tr id='row_cost'>
+ <tr id='row_cost' style="display:none;">
   <td class="text-nowrap align-top"><?php echo xlt('Total Cost'); ?>:</td>
   <td>
    <input class="form-control" type='text' size='7' name='form_cost' maxlength='12' />

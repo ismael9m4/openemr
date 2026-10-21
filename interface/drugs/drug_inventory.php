@@ -148,8 +148,8 @@ function mapToTable($row)
             echo "  <td>" . text($row['name']) . "</td>\n";
         }
         echo "  <td>" . ($row['active'] ? xlt('Yes') : xlt('No')) . "</td>\n";
-        echo "  <td>" . ($row['consumable'] ? xlt('Yes') : xlt('No')) . "</td>\n";
-        echo "  <td>" . text($row['ndc_number']) . "</td>\n";
+        echo "  <td style='display:none;'>" . ($row['consumable'] ? xlt('Yes') : xlt('No')) . "</td>\n";
+        echo "  <td style='display:none;'>" . text($row['ndc_number']) . "</td>\n";
         echo "  <td>" .
         generate_display_field(array('data_type' => '1','list_id' => 'drug_form'), $row['form']) .
         "</td>\n";
@@ -387,10 +387,10 @@ foreach (
         <tr>
             <th><?php echo xlt('Name'); ?> </a></th>
             <th><?php echo xlt('Act'); ?></th>
-            <th><?php echo xlt('Cons'); ?></th>
-            <th><?php echo xlt('NDC'); ?> </a></th>
+            <th style='display:none;'><?php echo xlt('Cons'); ?></th>
+            <th style='display:none;'><?php echo xlt('NDC'); ?> </a></th>
             <th><?php echo xlt('Form'); ?> </a></th>
-            <th><?php echo xlt('Size'); ?></th>
+            <th><?php echo xlt('Volumen o peso total'); ?></th>
             <th title='<?php echo xlt('Measurement Units'); ?>'><?php echo xlt('Unit'); ?></th>
             <th title='<?php echo xla('Purchase or Transfer'); ?>'><?php echo xlt('Tran'); ?></th>
             <th><?php echo xlt('Lot'); ?> </a></th>

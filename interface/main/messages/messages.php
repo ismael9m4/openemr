@@ -414,7 +414,7 @@ if (!empty($_REQUEST['go'])) { ?>
                                     <div class="col-12 oe-custom-line">
                                         <div class="row">
                                             <div class="col-6 col-md-3">
-                                                <label for="form_note_type"><?php echo xlt('Type'); ?>:</label>
+                                                <label for="form_note_type"><?php echo xlt('Sector'); ?>:</label>
                                                 <?php
                                                 if ($title == "") {
                                                     $title = "Unassigned";
@@ -477,7 +477,7 @@ if (!empty($_REQUEST['go'])) { ?>
                                             </div>
                                             <?php } ?>
                                             <div class="col-6 col-sm-4 d-flex align-items-end flex-wrap">
-                                                <label for="assigned_to_text"><?php echo xlt('To{{Destination}}'); ?>:</label>
+                                                <label for="assigned_to_text"><?php echo xlt('Destinatario/s{{Destination}}'); ?>:</label>
                                                 <input type='text' name='assigned_to_text' class='form-control oe-cursor-stop' id='assigned_to_text' readonly='readonly' value='' placeholder='<?php echo xla("SELECT Users FROM The Dropdown LIST"); ?>' />
                                                 <input type='hidden' name='assigned_to' id='assigned_to' />
                                             </div>

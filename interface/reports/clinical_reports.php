@@ -44,8 +44,6 @@ $patient_id = trim($_POST["patient_id"] ?? '');
 $age_from = $_POST["age_from"] ?? '';
 $age_to = $_POST["age_to"] ?? '';
 $sql_gender = $_POST["gender"] ?? '';
-$sql_ethnicity = $_POST["ethnicity"] ?? '';
-$sql_race = $_POST["race"] ?? '';
 $form_drug_name = trim($_POST["form_drug_name"] ?? '');
 $form_diagnosis = trim($_POST["form_diagnosis"] ?? '');
 $form_lab_results = trim($_POST["form_lab_results"] ?? '');
@@ -221,7 +219,7 @@ $communication = trim($_POST["communication"] ?? '');
 <span class='title'>
 <?php echo htmlspecialchars(xl('Report - Clinical'), ENT_NOQUOTES); ?>
 </span>
-<!-- Search can be done using age range, gender, and ethnicity filters.
+<!-- Search can be done using age range and gender filters.
 Search options include diagnosis, procedure, prescription, medical history, and lab results.
 -->
 <div id="report_parameters_daterange"> <?php echo text(oeFormatDateTime($sql_date_from, "global", true)) .
@@ -273,10 +271,6 @@ Search options include diagnosis, procedure, prescription, medical history, and 
 
                     </tr>
                     <tr>
-                        <td class='col-form-label'><?php echo xlt('Race'); ?>:</td>
-                        <td><?php echo generate_select_list('race', 'race', $sql_race, 'Select Race', 'Unassigned', '', ''); ?></td>
-                        <td class='col-form-label'><?php echo xlt('Ethnicity'); ?>:</td>
-                        <td><?php echo generate_select_list('ethnicity', 'ethnicity', $sql_ethnicity, 'Select Ethnicity', 'Unassigned', '', ''); ?></td>
                         <td class='col-form-label'><?php echo xlt('Immunization'); ?>:</td>
                         <td><input type='text' name='form_immunization' class='form-control' size='10' maxlength='250' value='<?php echo attr($form_immunization); ?>' title='<?php echo xla('Optional immunization name or code, use % as a wildcard'); ?>' /></td>
                     </tr>
@@ -441,12 +435,12 @@ Search options include diagnosis, procedure, prescription, medical history, and 
 // SQL scripts for the various searches
 $sqlBindArray = array();
 if (!empty($_POST['form_refresh'])) {
+    $odrstmt = "";
     $sqlstmt = "select
                 concat(pd.fname, ' ', pd.lname) AS patient_name,
                 pd.pid AS patient_id,
                 DATE_FORMAT(FROM_DAYS(DATEDIFF(NOW(),pd.dob)), '%Y')+0 AS patient_age,
                 pd.sex AS patient_sex,
-                pd.race AS patient_race,pd.ethnicity AS patient_ethinic,
                 concat(u.fname, ' ', u.lname)  AS users_provider,
                 REPLACE(REPLACE(concat_ws(',',IF(pd.hipaa_allowemail = 'YES', 'Allow Email','NO'),IF(pd.hipaa_allowsms = 'YES', 'Allow SMS','NO') , IF(pd.hipaa_mail = 'YES', 'Allow Mail Message','NO') , IF(pd.hipaa_voice = 'YES', 'Allow Voice Message','NO') ), ',NO',''), 'NO,','') as communications";
     if (!empty($form_diagnosis)) {
@@ -495,7 +489,6 @@ if (!empty($_POST['form_refresh'])) {
                         c.code_text as code_text,
                         fe.encounter as encounter,
                         b.date as date";
-        $mh_stmt = $mh_stmt . ",code,code_text,encounter,date";
     }
 
     if (strlen($form_immunization) > 0) {
@@ -626,15 +619,7 @@ if (!empty($_POST['form_refresh'])) {
           array_push($sqlBindArray, $sql_gender);
     }
 
-    if (strlen($sql_ethnicity) != 0) {
-         $whr_stmt = $whr_stmt . "   and pd.ethnicity = ?";
-         array_push($sqlBindArray, $sql_ethnicity);
-    }
 
-    if (strlen($sql_race) != 0) {
-         $whr_stmt = $whr_stmt . "   and pd.race = ?";
-         array_push($sqlBindArray, $sql_race);
-    }
 
     if ($facility != '') {
         $whr_stmt = $whr_stmt . "   and f.id = ? ";
@@ -680,9 +665,11 @@ if (!empty($_POST['form_refresh'])) {
     }
 
     if (!empty($form_diagnosis)) {
-        $odrstmt = $odrstmt . ",lists_diagnosis";
-    } elseif ((!empty($_POST['form_diagnosis_allergy'])) || (!empty($_POST['form_diagnosis_medprb']))) {
-        $odrstmt = $odrstmt . ",lists_title";
+        if ((!empty($_POST['form_diagnosis_allergy'])) || (!empty($_POST['form_diagnosis_medprb']))) {
+            $odrstmt = $odrstmt . ",lists_title";
+        } else {
+            $odrstmt = $odrstmt . ",lists_diagnosis";
+        }
     }
 
     if ((!empty($_POST['form_drug'])) || (strlen($form_drug_name) > 0)) {
@@ -746,11 +733,9 @@ if (!empty($_POST['form_refresh'])) {
                 <td width="5%"><strong><?php echo xlt('PID');?></strong></td>
                 <td width="5%"><strong><?php echo xlt('Age');?></strong></td>
                 <td width="10%"><strong><?php echo xlt('Gender'); ?></strong></td>
-                <td width="15%"><strong><?php echo xlt('Race');?></strong></td>
-                <td width="15%"><strong><?php echo xlt('Ethnicity');?></strong></td>
                 <td width="15%" <?php
                 if (strlen($communication) == 0 || !empty($_POST['communication_check'])) {
-                    ?> colspan='5' <?php
+                    ?> colspan='7' <?php
                 } ?>><strong><?php echo xlt('Provider');?></strong></td>
                 <?php if (strlen($communication) > 0 || (!empty($_POST['communication_check']))) { ?>
                 <td colspan='4'><strong><?php echo xlt('Communication');?></strong></td>
@@ -761,11 +746,9 @@ if (!empty($_POST['form_refresh'])) {
                 <td> <?php echo text($row['patient_id']); ?>&nbsp;</td>
                 <td> <?php echo text($row['patient_age']); ?>&nbsp;</td>
                                 <td> <?php echo generate_display_field(array('data_type' => '1','list_id' => 'sex'), $row['patient_sex']); ?>&nbsp;</td>
-                <td> <?php echo generate_display_field(array('data_type' => '1','list_id' => 'race'), $row['patient_race']); ?>&nbsp;</td>
-                               <td> <?php echo generate_display_field(array('data_type' => '1','list_id' => 'ethnicity'), $row['patient_ethinic']); ?>&nbsp;</td>
                                <td <?php
                                 if (strlen($communication) == 0 || (!empty($_POST['communication_check']))) {
-                                    ?> colspan='5' <?php
+                                    ?> colspan='7' <?php
                                 } ?>> <?php echo text($row['users_provider']); ?>&nbsp;</td>
 
                                 <?php if (strlen($communication) > 0 || !empty($_POST['communication_check'])) { ?>

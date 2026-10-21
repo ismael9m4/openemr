@@ -849,6 +849,83 @@ $(function () {
     $("#form_i<?php echo $i?>subscriber_relationship").change(function() { auto_populate_employer_address<?php echo $i?>(); });
     <?php } ?>
 
+    function mostrarModalCamposObligatorios() {
+        var campos = [];
+
+        $('.is-invalid, input:invalid, select:invalid, textarea:invalid').each(function () {
+            var $campo = $(this);
+
+            if (!$campo.is(':visible')) {
+                return;
+            }
+
+            var valor = $campo.val();
+
+            if (Array.isArray(valor)) {
+                valor = valor.join('');
+            }
+
+            if ($.trim(valor || '') !== '') {
+                return;
+            }
+
+            var id = $campo.attr('id');
+            var nombre = '';
+
+            if (id) {
+                nombre = $('label[for="' + id + '"]').first().text();
+            }
+
+            if (!nombre) {
+                nombre = $campo.closest('.form-group, .form-row, tr, td').find('label').first().text();
+            }
+
+            if (!nombre) {
+                nombre = $campo.attr('title') || $campo.attr('name') || id || 'Campo obligatorio';
+            }
+
+            nombre = $.trim(nombre.replace(/\*/g, '').replace(/\s+/g, ' '));
+
+            if (nombre && campos.indexOf(nombre) === -1) {
+                campos.push(nombre);
+            }
+        });
+
+        if ($('#modalCamposObligatorios').length === 0) {
+            $('body').append(
+                '<div class="modal fade" id="modalCamposObligatorios" tabindex="-1" role="dialog" aria-hidden="true">' +
+                    '<div class="modal-dialog modal-dialog-centered" role="document">' +
+                        '<div class="modal-content border-warning">' +
+                            '<div class="modal-header bg-warning text-dark">' +
+                                '<h5 class="modal-title">Campos obligatorios faltantes</h5>' +
+                            '</div>' +
+                            '<div class="modal-body">' +
+                                '<p>Debe completar los siguientes campos antes de crear el paciente:</p>' +
+                                '<ul id="listaCamposObligatorios" class="mb-0"></ul>' +
+                            '</div>' +
+                            '<div class="modal-footer">' +
+                                '<button type="button" class="btn btn-warning" data-dismiss="modal">Aceptar</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>'
+            );
+        }
+
+        var $lista = $('#listaCamposObligatorios');
+        $lista.empty();
+
+        if (campos.length === 0) {
+            $lista.append('<li>Revise los campos marcados en rojo en el formulario.</li>');
+        } else {
+            campos.forEach(function (campo) {
+                $lista.append('<li>' + $('<div>').text(campo).html() + '</li>');
+            });
+        }
+
+        $('#modalCamposObligatorios').modal('show');
+    }
+
     $('#search').click(function() { searchme(); });
     $('#create').click(function() { check()});
 
@@ -860,6 +937,10 @@ $(function () {
             top.restoreSession();
             var valid = validate(f);
         <?php }?>
+        if (!valid) {
+            setTimeout(mostrarModalCamposObligatorios, 50);
+            return false;
+        }
         if (valid) {
             if (force_submit) {
                 // In this case dups were shown already and Save should just save.

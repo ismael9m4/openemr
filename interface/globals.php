@@ -149,14 +149,18 @@ if (empty($_SESSION['site_id']) || !empty($_GET['site'])) {
         $tmp = $_GET['site'];
     } else {
         if (empty($ignoreAuth) && empty($ignoreAuth_onsite_portal)) {
-            // mdsupport - Don't die if logout menu link is called from expired session.
-            // Eliminate this code when close method is available for session management.
+
             if ((isset($_GET['auth'])) && ($_GET['auth'] == "logout")) {
                 $GLOBALS['login_screen'] = "login_screen.php";
                 $srcdir = "../library";
                 require_once("$srcdir/auth.inc.php");
             }
-            die("Site ID is missing from session data! o Cierre esta ventana y abra una nueva");
+
+            session_unset();
+            session_destroy();
+
+            header("Location: /openemr/interface/login/login.php?site=default");
+            exit;
         }
 
         $tmp = $_SERVER['HTTP_HOST'];

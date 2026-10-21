@@ -16,10 +16,97 @@ require_once("../globals.php");
 
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Services\ContactService;
+use OpenEMR\Core\Header;
 
 if (!CsrfUtils::verifyCsrfToken($_POST["csrf_token_form"])) {
     CsrfUtils::csrfNotVerified();
 }
+
+//Bloque añadido
+function mostrarModalValidacionPaciente($mensaje, $permitirContinuar = true)
+{
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <?php Header::setupHeader(['common']); ?>
+        <title><?php echo xlt('Validacion de paciente'); ?></title>
+    </head>
+    <body>
+        <form method="post" id="formContinuarPaciente">
+            <?php foreach ($_POST as $key => $value) { ?>
+                <?php if ($key === 'csrf_token_form' || $key === 'validacion_paciente_override') {
+                    continue;
+                } ?>
+
+                <?php if (is_array($value)) {
+                    continue;
+                } ?>
+
+                <input type="hidden"
+                       name="<?php echo attr($key); ?>"
+                       value="<?php echo attr($value); ?>" />
+            <?php } ?>
+
+            <input type="hidden"
+                   name="csrf_token_form"
+                   value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>" />
+
+            <input type="hidden"
+                   name="validacion_paciente_override"
+                   value="1" />
+        </form>
+
+        <div class="modal fade" id="modalValidacionPaciente" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content border-warning">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title"><?php echo xlt('Advertencia'); ?></h5>
+                    </div>
+
+                    <div class="modal-body">
+                        <div style="font-size: 32px;">!</div>
+                        <p class="mb-0"><?php echo text($mensaje); ?></p>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="volverPaciente">
+                            <?php echo xlt('Volver'); ?>
+                        </button>
+
+                        <?php if ($permitirContinuar) { ?>
+                            <button type="button" class="btn btn-warning" id="continuarPaciente">
+                                <?php echo xlt('Continuar de todos modos'); ?>
+                            </button>
+                        <?php } ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            $(function () {
+                $('#modalValidacionPaciente').modal({
+                    backdrop: 'static',
+                    keyboard: false
+                });
+
+                $('#volverPaciente').on('click', function () {
+                    window.history.back();
+                });
+
+                $('#continuarPaciente').on('click', function () {
+                    $('#formContinuarPaciente').submit();
+                });
+            });
+        </script>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+//Fin bloque añadido
+
 
 // Validation for non-unique external patient identifier.
 $alertmsg = '';
@@ -67,7 +154,65 @@ while ($frow = sqlFetchArray($fres)) {
         $newdata[$tblname][$colname] = $value;
     }
 }
+//Codigo Añadido
+$dniPaciente = preg_replace('/\D+/', '', $newdata['patient_data']['pubpid'] ?? '');
+$dniTitular = preg_replace('/\D+/', '', $newdata['patient_data']['ss'] ?? '');
+$tipoAfiliado = trim((string) ($newdata['patient_data']['preferred_name'] ?? ''));
+$continuarDeTodosModos = !empty($_POST['validacion_paciente_override']);
 
+if (!$continuarDeTodosModos && $dniPaciente !== '' && $dniTitular !== '') {
+    $esTitularPorDni = ($dniPaciente === $dniTitular);
+    $esAdherentePorTipo = stripos($tipoAfiliado, 'adherente') !== false;
+
+    if ($esAdherentePorTipo && $esTitularPorDni) {
+        mostrarModalValidacionPaciente("Un adherente no puede tener como DNI titular su propio DNI.", false);
+    }
+
+    if ($esTitularPorDni) {
+        $existeComoAdherente = sqlQuery(
+            "SELECT pid, pubpid, ss, fname, lname
+             FROM patient_data
+             WHERE pubpid = ?
+               AND pubpid <> ss
+             LIMIT 1",
+            [$dniPaciente]
+        );
+
+        if ($existeComoAdherente) {
+            mostrarModalValidacionPaciente(
+                "Este afiliado ya pertenece como adherente de otro titular. " .
+                "DNI titular actual: " . $existeComoAdherente['ss'], false
+            );
+        }
+    }
+
+    if (!$esTitularPorDni) {
+        $titularExiste = sqlQuery(
+            "SELECT COUNT(*) AS existe
+             FROM patient_data
+             WHERE pubpid = ?
+               AND pubpid = ss",
+            [$dniTitular]
+        );
+
+        if ((int) ($titularExiste['existe'] ?? 0) <= 0) {
+            mostrarModalValidacionPaciente("El DNI titular indicado no corresponde a un titular valido o no esta cargado en el Sistema.", true);
+        }
+
+        $cantidadAdherentes = sqlQuery(
+            "SELECT COUNT(*) AS cantidad
+             FROM patient_data
+             WHERE ss = ?
+               AND pubpid <> ss",
+            [$dniTitular]
+        );
+
+        if ((int) ($cantidadAdherentes['cantidad'] ?? 0) >= 13) {
+            mostrarModalValidacionPaciente("El titular alcanzo el maximo de 13 adherentes.", false);
+        }
+    }
+}
+//Fin Codigo añadido
 // Use the global helper to use the PatientService to create a new patient
 // The result contains the pid, so use that to set the global session pid
 $pid = updatePatientData(null, $newdata['patient_data'], true);
