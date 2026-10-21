@@ -1,0 +1,58 @@
+services:
+  mysql:
+    image: mariadb:10.11
+    restart: unless-stopped
+    command: ["mysqld", "--character-set-server=utf8mb4"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TEST_DB_ROOT_PASSWORD:?Set TEST_DB_ROOT_PASSWORD in Portainer}
+      MYSQL_DATABASE: openemr
+      MYSQL_USER: openemr
+      MYSQL_PASSWORD: ${TEST_DB_PASSWORD:?Set TEST_DB_PASSWORD in Portainer}
+    volumes:
+      - test_database:/var/lib/mysql
+      - ${SQL_DUMP_HOST_PATH:?Set SQL_DUMP_HOST_PATH to the SQL file path on the Docker host}:/docker-entrypoint-initdb.d/01-restore.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  openemr:
+    image: ${OPENEMR_IMAGE:-openemr/openemr:flex}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${OPENEMR_HTTP_PORT:-8088}:80"
+      - "${OPENEMR_HTTPS_PORT:-8448}:443"
+    volumes:
+      - ../..:/openemr:ro
+      - ../..:/var/www/localhost/htdocs/openemr:rw
+      - test_assets:/var/www/localhost/htdocs/openemr/public/assets
+      - test_themes:/var/www/localhost/htdocs/openemr/public/themes
+      - test_sites:/var/www/localhost/htdocs/openemr/sites
+      - test_node_modules:/var/www/localhost/htdocs/openemr/node_modules
+      - test_vendor:/var/www/localhost/htdocs/openemr/vendor
+      - test_ccda_node_modules:/var/www/localhost/htdocs/openemr/ccdaservice/node_modules
+      - test_logs:/var/log
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_ROOT_PASS: ${TEST_DB_ROOT_PASSWORD:?Set TEST_DB_ROOT_PASSWORD in Portainer}
+      MYSQL_USER: openemr
+      MYSQL_PASS: ${TEST_DB_PASSWORD:?Set TEST_DB_PASSWORD in Portainer}
+      OE_USER: ${TEST_OE_USER:-admin}
+      OE_PASS: ${TEST_OE_PASSWORD:?Set TEST_OE_PASSWORD in Portainer}
+      EASY_DEV_MODE: "yes"
+      EASY_DEV_MODE_NEW: "yes"
+      OPENEMR_DOCKER_ENV_TAG: portainer-test
+
+volumes:
+  test_database:
+  test_assets:
+  test_themes:
+  test_sites:
+  test_node_modules:
+  test_vendor:
+  test_ccda_node_modules:
+  test_logs:
