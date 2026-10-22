@@ -27,8 +27,8 @@ services:
       - "${OPENEMR_HTTP_PORT:-8088}:80"
       - "${OPENEMR_HTTPS_PORT:-8448}:443"
     volumes:
-      - ../..:/openemr:ro
-      - ../..:/var/www/localhost/htdocs/openemr:rw
+      - ${OPENEMR_SOURCE_PATH:?Set OPENEMR_SOURCE_PATH to the absolute code checkout path}:/openemr:ro
+      - ${OPENEMR_SOURCE_PATH:?Set OPENEMR_SOURCE_PATH to the absolute code checkout path}:/var/www/localhost/htdocs/openemr:rw
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/assets:/var/www/localhost/htdocs/openemr/public/assets
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/themes:/var/www/localhost/htdocs/openemr/public/themes
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/sites:/var/www/localhost/htdocs/openemr/sites
