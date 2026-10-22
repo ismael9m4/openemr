@@ -9,7 +9,7 @@ services:
       MYSQL_USER: openemr
       MYSQL_PASSWORD: ${TEST_DB_PASSWORD:?Set TEST_DB_PASSWORD in Portainer}
     volumes:
-      - test_database:/var/lib/mysql
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/database:/var/lib/mysql
       - ${SQL_DUMP_HOST_PATH:?Set SQL_DUMP_HOST_PATH to the SQL file path on the Docker host}:/docker-entrypoint-initdb.d/01-restore.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -29,13 +29,13 @@ services:
     volumes:
       - ../..:/openemr:ro
       - ../..:/var/www/localhost/htdocs/openemr:rw
-      - test_assets:/var/www/localhost/htdocs/openemr/public/assets
-      - test_themes:/var/www/localhost/htdocs/openemr/public/themes
-      - test_sites:/var/www/localhost/htdocs/openemr/sites
-      - test_node_modules:/var/www/localhost/htdocs/openemr/node_modules
-      - test_vendor:/var/www/localhost/htdocs/openemr/vendor
-      - test_ccda_node_modules:/var/www/localhost/htdocs/openemr/ccdaservice/node_modules
-      - test_logs:/var/log
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/assets:/var/www/localhost/htdocs/openemr/public/assets
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/themes:/var/www/localhost/htdocs/openemr/public/themes
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/sites:/var/www/localhost/htdocs/openemr/sites
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/node_modules:/var/www/localhost/htdocs/openemr/node_modules
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/vendor:/var/www/localhost/htdocs/openemr/vendor
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/ccda_node_modules:/var/www/localhost/htdocs/openemr/ccdaservice/node_modules
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/logs:/var/log
     environment:
       MYSQL_HOST: mysql
       MYSQL_ROOT_PASS: ${TEST_DB_ROOT_PASSWORD:?Set TEST_DB_ROOT_PASSWORD in Portainer}
@@ -47,12 +47,3 @@ services:
       EASY_DEV_MODE_NEW: "yes"
       OPENEMR_DOCKER_ENV_TAG: portainer-test
 
-volumes:
-  test_database:
-  test_assets:
-  test_themes:
-  test_sites:
-  test_node_modules:
-  test_vendor:
-  test_ccda_node_modules:
-  test_logs:
