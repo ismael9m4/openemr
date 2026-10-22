@@ -1,6 +1,6 @@
 # Instancia de prueba en Portainer
 
-Este stack ejecuta el checkout local del código, con MariaDB aislada y una copia SQL importada durante la primera inicialización de la base. En Portainer Community Edition, el repositorio se clona por separado en el host: los montajes relativos desde un Stack Git requieren Business Edition.
+Este stack ejecuta el checkout local del código, con MariaDB aislada y una copia SQL importada durante la primera inicialización de la base. En Portainer Community Edition, el código se clona por separado en el host y el Stack Git usa su ruta absoluta; los montajes relativos desde un Stack Git requieren Business Edition.
 
 ## Preparar Portainer
 
@@ -9,7 +9,7 @@ Este stack ejecuta el checkout local del código, con MariaDB aislada y una copi
    sudo git clone --branch codex/backup-add-edit-events --single-branch https://github.com/ismael9m4/openemr.git /var/www/openemr-test/source
    ```
 2. En el host donde corre Docker, crea `/var/www/openemr-test/backups` y guarda allí el `.sql`. Esta ruta aprovecha la partición grande `/var/www`, pero queda fuera de `/var/www/html` (la carpeta que normalmente publica el servidor web). No subas el dump al repositorio: puede contener datos sensibles.
-3. En Portainer, crea un Stack con **Web editor**. Copia el contenido de este Compose desde `docker/test-portainer/docker-compose.yml` de la rama `codex/backup-add-edit-events`.
+3. En Portainer, crea o actualiza un Stack desde el repositorio `https://github.com/ismael9m4/openemr`, rama `codex/backup-add-edit-events`, con Compose path `docker/test-portainer/docker-compose.yml`.
 4. En las variables del Stack define:
    - `OPENEMR_SOURCE_PATH`: `/var/www/openemr-test/source`.
    - `SQL_DUMP_HOST_PATH`: ruta absoluta al `.sql` vista desde el host de Docker (por ejemplo `/var/www/openemr-test/backups/openemr.sql`).
