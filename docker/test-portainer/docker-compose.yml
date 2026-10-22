@@ -36,6 +36,7 @@ services:
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/vendor:/var/www/localhost/htdocs/openemr/vendor
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/ccda_node_modules:/var/www/localhost/htdocs/openemr/ccdaservice/node_modules
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/logs:/var/log
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/couchdb:/couchdb/data
     environment:
       MYSQL_HOST: mysql
       MYSQL_ROOT_PASS: ${TEST_DB_ROOT_PASSWORD:?Set TEST_DB_ROOT_PASSWORD in Portainer}
