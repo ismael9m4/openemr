@@ -35,7 +35,8 @@ services:
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/node_modules:/var/www/localhost/htdocs/openemr/node_modules
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/vendor:/var/www/localhost/htdocs/openemr/vendor
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/ccda_node_modules:/var/www/localhost/htdocs/openemr/ccdaservice/node_modules
-      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/logs:/var/log
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/logs:/var/www/logs
+      - ${TEST_DATA_ROOT:-/var/www/openemr-test}/apache-logs:/var/log/apache2
       - ${TEST_DATA_ROOT:-/var/www/openemr-test}/couchdb:/couchdb/data
     environment:
       MYSQL_HOST: mysql
