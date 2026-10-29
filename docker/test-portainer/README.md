@@ -26,11 +26,14 @@ Si `/var/www/openemr-test/openemr-code` ya existe y es un checkout Git, actualí
 sudo git -C /var/www/openemr-test/openemr-code pull --ff-only origin codex/backup-add-edit-events
 ```
 
-Copia el dump SQL al servidor, por ejemplo a:
+Copia el dump SQL al servidor, por ejemplo a `/var/www/openemr-test/backups/openemr.sql`. Si el archivo ya está en `/var/www/html/backups`, puedes moverlo fuera del directorio público (ajusta el nombre al tuyo):
 
-```text
-/var/www/openemr-test/backups/openemr.sql
+```bash
+sudo mv -- /var/www/html/backups/db_openemr_2026-10-21_02-00-01.sql /var/www/openemr-test/backups/openemr.sql
+sudo chmod 600 /var/www/openemr-test/backups/openemr.sql
 ```
+
+Si el backup está en otra ubicación o aún no está en el servidor, súbelo primero y cópialo a esa ruta. En Portainer, `SQL_DUMP_HOST_PATH` debe apuntar exactamente a `/var/www/openemr-test/backups/openemr.sql`.
 
 Comprueba que existen el código y el dump:
 
@@ -91,7 +94,7 @@ Usa el puerto HTTP configurado si cambiaste `OPENEMR_HTTP_PORT`. Como el SQL res
 - MariaDB y los archivos persistentes quedan bajo `/var/www/openemr-test`.
 - El dump `01-restore.sql` se importa solo cuando la carpeta `/var/www/openemr-test/database` está vacía.
 - Un **Pull and redeploy** del Stack no debería borrar esa carpeta. No elimines `/var/www/openemr-test` ni la carpeta `database` si quieres conservar la instancia.
-- Para restaurar otro dump, primero respalda la base actual. Luego detén el Stack y renombra la carpeta `database` (por ejemplo, a `database-anterior`) para que MariaDB inicialice una carpeta vacía al desplegar de nuevo. No borres el respaldo anterior hasta verificar la nueva restauración.
+- Para restaurar otro dump, primero reemplaza `/var/www/openemr-test/backups/openemr.sql` por el archivo nuevo. En Portainer, detén el Stack. En Ubuntu renombra la base actual para conservarla: `sudo mv /var/www/openemr-test/database /var/www/openemr-test/database-anterior`. Inicia de nuevo el Stack; MariaDB creará una carpeta `database` vacía e importará el dump. No borres `database-anterior` hasta verificar que la restauración nueva quedó bien. Si `database-anterior` ya existe, usa otro nombre para conservar cada respaldo.
 - Usa datos anonimizados para las pruebas.
 
 ## Actualizar el código o probar otra versión de PHP
