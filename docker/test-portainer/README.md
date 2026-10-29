@@ -18,13 +18,13 @@ Este stack ejecuta el checkout local del código, con MariaDB aislada y una copi
    - `TEST_DB_PASSWORD`: contraseña temporal para el usuario de OpenEMR en MariaDB.
    - `TEST_OE_PASSWORD`: contraseña para el usuario administrador de OpenEMR.
    - `OPENEMR_HTTP_PORT` y `OPENEMR_HTTPS_PORT` (opcionales; predeterminados `8088` y `8448`).
-   - `OPENEMR_IMAGE` (opcional; predeterminado `openemr/openemr:flex`). Permite seleccionar una imagen de desarrollo OpenEMR que use la versión de PHP que se quiere evaluar.
+   - `OPENEMR_IMAGE` (opcional; predeterminado `openemr/openemr:flex-3.24-php-8.3`, PHP 8.3). Permite seleccionar otra imagen de desarrollo OpenEMR para evaluar una versión distinta de PHP.
 5. Despliega el Stack. Cuando los contenedores estén listos, abre `http://<host-de-docker>:8088` (o el puerto que configuraste).
 
 ## Importación y comparación de PHP
 
 MariaDB solo ejecuta `01-restore.sql` cuando la carpeta `database` está vacía. Comprueba que el dump sea compatible con MariaDB y que sus tablas correspondan a la base `openemr`. Para volver a importar el SQL, detén el Stack y elimina la carpeta `database` bajo `TEST_DATA_ROOT` antes de volver a desplegarlo; esto elimina los datos de prueba actuales.
 
-Para actualizar el código desde Git, ejecuta `sudo git -C /var/www/openemr-test/source pull` en el host y luego recrea el contenedor OpenEMR desde Portainer. Para comparar versiones de PHP, conserva una copia de los datos bajo `TEST_DATA_ROOT` y elige una etiqueta de imagen compatible mediante `OPENEMR_IMAGE`. Registra la etiqueta usada en cada prueba. Cambiar la imagen no modifica el SQL de respaldo. Confirma la versión efectiva de PHP en el contenedor antes de comparar resultados.
+El `composer.lock` de esta rama fija Twig en 3.7.1; Composer instala esa versión al preparar dependencias. Para actualizar el código desde Git, ejecuta `sudo git -C /var/www/openemr-test/source pull` en el host y luego recrea el contenedor OpenEMR desde Portainer. Para comparar versiones de PHP, conserva una copia de los datos bajo `TEST_DATA_ROOT` y elige una etiqueta de imagen compatible mediante `OPENEMR_IMAGE`. Registra la etiqueta usada en cada prueba. Cambiar la imagen no modifica el SQL de respaldo. Confirma la versión efectiva de PHP en el contenedor antes de comparar resultados.
 
 Los puertos de base de datos no se publican al host; la conexión de OpenEMR a MariaDB ocurre dentro de la red del Stack. Usa exclusivamente datos anonimizados para las pruebas.

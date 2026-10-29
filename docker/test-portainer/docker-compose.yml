@@ -18,7 +18,7 @@ services:
       retries: 12
 
   openemr:
-    image: ${OPENEMR_IMAGE:-openemr/openemr:flex}
+    image: ${OPENEMR_IMAGE:-openemr/openemr:flex-3.24-php-8.3}
     restart: unless-stopped
     depends_on:
       mysql:
